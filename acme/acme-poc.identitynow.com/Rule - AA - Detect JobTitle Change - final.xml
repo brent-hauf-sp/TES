@@ -1,0 +1,101 @@
+<?xml version=‘1.0’ encoding=‘UTF-8’?>
+<!DOCTYPE Rule PUBLIC “sailpoint.dtd” “sailpoint.dtd”>
+<Rule created=“1558815514899” id=“2c9180846add046e016af0a521130009" language=“beanshell” modified=“1559051649402" name=“Rule - IdentityAttribute - AA Detect JobTitle Change” type=“IdentityAttribute”>
+ <Attributes>
+   <Map>
+     <entry key=“requiresPeriodicRefresh” value=“true”/>
+   </Map>
+ </Attributes>
+ <Description>
+   This rule detects incoming authoritative source information on a user’s title to determine whether a job title change is underway
+ </Description>
+ <Source>
+
+import sailpoint.object.*;
+import sailpoint.api.*;
+import java.util.Date;
+import java.util.List;
+import java.util.ArrayList;
+import java.text.SimpleDateFormat;
+import java.util.Iterator;
+
+public String getEmployeeNewTitle() {
+   String jobTitle = “”;
+
+   try {
+
+       List appList = new ArrayList();
+           appList.add(Filter.eq(“application.name”,“Global HR system [source-63706]“));
+
+       Filter identityFilter = Filter.eq(“identity.name”, identity.getName());
+       Filter filter = Filter.and(identityFilter,Filter.or(appList));
+
+       QueryOptions ops = new QueryOptions();
+       ops.addFilter(filter);
+
+       Iterator links = context.search( Link.class, ops, “nativeIdentity, attributes” );
+
+       if ( links != null &amp;&amp; links.hasNext() ) {
+           Object[] row = (Object[]) links.next();
+           Attributes attributes = (Attributes) row[1];
+
+           if ( attributes != null ) {
+               //Just grab the full name and return it
+               if(attributes.getString(“title”) != null) {
+                   jobTitle = (String) attributes.getString(“title”);
+               }
+           }
+       }
+   }
+   catch(Exception e) {
+       e.printStackTrace();
+       log.info(“Rule - IdentityAttribute - AA Detect JobTitle Change... Could not find job title for identity in Global HR source”);
+       return jobTitle;
+   }
+
+   return jobTitle;
+}
+
+String titleChangeDate = “”;
+
+if(identity != null)
+{
+
+       log.info(“Rule - IdentityAttribute - AA Detect JobTitle Change: ”  + identity.getName() + ” processing identity ” + identity.getName());
+
+Identity oldIdentity = context.getObject(Identity.class, identity.getId());
+
+    String currentTitle = oldIdentity.getAttribute(“jobTitle”);
+       String existingData = oldIdentity.getAttribute(“roleChangeDateType”);
+
+    String newTitle = getEmployeeNewTitle();
+
+       log.info(“HKP Rule - IdentityAttribute - AA Detect JobTitle Change: ”  + identity.getName() + ” currentTitle [” + currentTitle + “]”);
+       log.info(“HKP Rule - IdentityAttribute - AA Detect JobTitle Change: ”  + identity.getName() + ” newTitle [” + newTitle + “]”);
+    
+    if(currentTitle != null &amp;&amp; newTitle != null &amp;&amp; !currentTitle.equalsIgnoreCase(newTitle))
+    {
+       log.info(“HKP Rule - IdentityAttribute - AA Detect JobTitle Change: ”  + identity.getName() + ” change detected”);
+       //New role change detected; return today’s date
+       Date now = new Date();
+
+       // Date format we expect dates to be in (ISO8601)
+       SimpleDateFormat dateFormat = new SimpleDateFormat(“yyyy-MM-dd”);
+       titleChangeDate =  dateFormat.format(now);    
+    }
+   else if(existingData != null &amp;&amp; !“”.equals(existingData))
+   {
+       log.info(“HKP Rule - IdentityAttribute - AA Detect JobTitle Change: ”  + identity.getName() + ” change already detected; not overriding to blank”);
+       //Role change was already detected in a previous run; don’t override it with blank, just return the previous data
+       titleChangeDate = existingData;
+   }
+   else
+   {
+       titleChangeDate = “”;
+   }
+}
+
+return titleChangeDate;
+
+   </Source>
+</Rule>
