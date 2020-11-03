@@ -1,0 +1,91 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE Rule PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<Rule language="beanshell" name="Generate sAMAccountName" type="AttributeGenerator">
+  <Description>This will generate a username.</Description>
+  <Source><![CDATA[
+
+	import java.util.Iterator;
+	import sailpoint.object.*;
+	import java.util.ArrayList;
+	import sailpoint.api.*;
+	import sailpoint.object.*;
+	import java.util.Iterator;
+	import java.util.List;
+	import org.apache.commons.lang.StringUtils;
+	
+	int maxIteration = 1000;
+	
+	public String generateUsername ( String firstInitial, String lastName ) {
+		firstInitial = StringUtils.trimToNull( firstInitial );
+		lastName = StringUtils.trimToNull( lastName );
+		if ( ( firstInitial == null ) || ( lastName == null ) )
+			return null;
+		else
+			return generateUsername( firstInitial,  lastName,  0 );
+	}
+	
+	public String generateUsername ( String firstInitial,  String lastName, int iteration ) {
+	
+		/*
+		* This will hold the final username;
+		*/
+		String username = null; 
+		
+		/*
+		* Iteration logic - this was provided by the customer.
+		*/
+		
+		switch ( iteration ) {
+			case 0: 	
+				username = firstInitial + lastName;
+				break;
+			default:	
+				username = firstInitial+ lastName + ( iteration - 1 );	
+				break;	
+		}
+		// Make lowercase
+		//username = StringUtils.lowerCase( username );
+		
+		// Remove any non-word characters.
+		//username = username.replaceAll("\\W", "");
+		username = username.replaceAll("[^a-zA-Z0-9.]", "");
+		
+		// Trim the string
+		username = StringUtils.trimToNull( username );
+		
+		if ( isUnique ( username ) && meetsRequirements ( username ) )
+			return username;
+		else if ( iteration < maxIteration )
+			return generateUsername ( firstInitial,  lastName,( iteration + 1 ) );
+		else
+			return null;
+	}
+	
+	public boolean isUnique ( String username ) {
+	
+		QueryOptions qo = new QueryOptions();
+		qo.addFilter( Filter.ignoreCase( Filter.eq( "displayName", username ) ) );
+                qo.addFilter( Filter.eq( "application", application ) );
+		qo.setDistinct(true);
+		
+		List props = new ArrayList();
+		props.add( "displayName" );
+		
+		Iterator it = context.search( Link.class, qo, props );
+		
+		return !(it.hasNext());
+	}
+	
+	public  boolean meetsRequirements ( String username ) {
+		return ( StringUtils.length( username ) >= 3 ) &&( StringUtils.length( username ) <= 20 );
+	}
+	
+	
+	String attributeName = "sAMAccountName";
+	
+	String firstInitial = "T" + identity.getFirstname().charAt(0).toString();
+	String lastName = identity.getLastname();
+	return generateUsername( firstInitial, lastName );
+
+	]]></Source>
+</Rule>
