@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE Rule PUBLIC "sailpoint.dtd" "sailpoint.dtd">
+<Rule language="beanshell" name="AD - After Create Rule" type="ConnectorAfterCreate">
+  <Attributes>
+    <Map>
+      <entry key="ObjectOrientedScript" value="true"/>
+      <entry key="disabled" value="false"/>
+      <entry key="extension" value=".ps1"/>
+      <entry key="program" value="powershell.exe"/>
+      <entry key="timeout" value="360"/>
+    </Map>
+  </Attributes>
+  <Description>Generates an AD password and sends out an email to the user's manager </Description>
+  <Source><![CDATA[
+  #Change Log
+  #Date			User		Notes
+  #2017-12-01 	CT197089	Initial revision
+  #2018-04-05 	CT197089	Updated with settings for production move
+  #2018-04-09 	CT197089	Updated logging to assist with production troubleshooting
+  #2018-04-24 	CT197089	Added logic for creation of homeDirectory
+  
+  
+  TRY
+  {
+		$Logfile = "C:\SailPoint\IQService\ADAfterCreateLogs.log"
+		Add-type -path "C:\SailPoint\IQService\Utils.dll";
+		Add-content $Logfile -value "Logging enabled for AD-After Create Rule";
+  
+		# Read environment variables
+		$sReader = New-Object System.IO.StringReader([System.String]$env:Request);
+		
+		# Form the xml reader object
+		$xmlReader = [System.xml.XmlTextReader]([Sailpoint.Utils.xml.XmlUtil]::getReader($sReader));
+		
+		# Create SailPoint Request object
+		$requestObject = New-Object Sailpoint.Utils.objects.AccountRequest($xmlReader);
+		
+	  
+		$sReaderResponse = New-Object System.IO.StringReader([System.String]$env:Result);
+		$xmlReaderResponse = [System.Xml.XmlTextReader] ([SailPoint.Utils.xml.XmlUtil]::getReader($sReaderResponse));
+		$responseObject = New-Object SailPoint.Utils.objects.ServiceResult($xmlReaderResponse);
+  
+		  
+		  
+		 Add-content $Logfile -value "  Request  ----- [System.String]$env:Request";
+		 
+		foreach ($attribute in $requestObject.AttributeRequests) {
+			if($attribute.Name -eq "sAMAccountName") {
+				try {
+					$userId = $attribute.Value;
+					Add-content $Logfile -value "UserId:  + $userId";
+				} catch {
+					$Exception = "sAMAccountName value is null in the requestObject. "
+					Add-content $Logfile -value "sAMAccountName value is null in the requestObject: $($_.Exception.Message) "  
+				}
+			}
+			if($attribute.Name -eq "homeDirectory") {
+				try {
+					$homeDir = $attribute.Value;
+					Add-content $Logfile -value "homeDirectory:  + $homeDir";
+				} catch {
+					$Exception = "homeDirectory value is null in the requestObject. "
+					Add-content $Logfile -value "homeDirectory value is null in the requestObject : $($_.Exception.Message)"
+				}	  
+			}
+		}
+				
+		$tempFile = "C:\SailPoint\IQService\temp.xml";
+		#store object in temporary file
+     
+        write-output $env:Request | add-content $tempFile		
+				
+		$command= "C:\SailPoint\IQService\AD-GeneratePassword.ps1 -responseObject $responseObject -requestObject $requestObject -userId '$userId' -homeDir '$homeDir' -tempFile '$tempFile'"
+		
+		Add-content $Logfile -value "Command is $command"
+		
+		$result  = Invoke-Expression $command
+		Add-content $Logfile -value "Result is $result" 
+
+	  
+		Add-content $Logfile -value " Exit AD-After Create Rule";
+	} 
+	CATCH
+	{
+		$ExceptionLogfile = "C:\SailPoint\IQService\AfterCreateExceptionLogs.log"
+		$ErrorMessage = $_.Exception.Message
+		$FailedItem = $_.Exception.ItemName
+		Add-content $ExceptionLogfile -value $ErrorMessage
+		Add-content $ExceptionLogfile -value $FailedItem
+		Break
+	}
+  
+  
+  ]]></Source>
+</Rule>
